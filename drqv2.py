@@ -66,6 +66,31 @@ class Encoder(nn.Module):
         h = h.view(h.shape[0], -1)
         return h
 
+class FeatureEncoder(nn.Module):
+    def __init__(
+        self, input_dim, hidden_dim, output_dim, hidden_depth, output_mod=None
+    ):
+        super().__init__()
+        self.trunk = mlp(input_dim, hidden_dim, output_dim, hidden_depth, output_mod)
+        self.apply(utils.weight_init)
+        self.repr_dim = output_dim
+
+    def forward(self, x):
+        return self.trunk(x)
+
+
+def mlp(input_dim, hidden_dim, output_dim, hidden_depth, output_mod=None):
+    if hidden_depth == 0:
+        mods = [nn.Linear(input_dim, output_dim)]
+    else:
+        mods = [nn.Linear(input_dim, hidden_dim), nn.ReLU(inplace=True)]
+        for i in range(hidden_depth - 1):
+            mods += [nn.Linear(hidden_dim, hidden_dim), nn.ReLU(inplace=True)]
+        mods.append(nn.Linear(hidden_dim, output_dim))
+    if output_mod is not None:
+        mods.append(output_mod)
+    trunk = nn.Sequential(*mods)
+    return trunk
 
 class Actor(nn.Module):
     def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
@@ -133,8 +158,13 @@ class DrQV2Agent:
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
 
+        self.image_state_space = len(obs_shape) == 3
+
         # models
-        self.encoder = Encoder(obs_shape).to(device)
+        if self.image_state_space:
+            self.encoder = Encoder(obs_shape).to(device)
+        else:
+            self.encoder = FeatureEncoder(6, 256, 128, 2).to(device)
         self.actor = Actor(self.encoder.repr_dim, action_shape, feature_dim,
                            hidden_dim).to(device)
 
@@ -238,8 +268,13 @@ class DrQV2Agent:
             batch, self.device)
 
         # augment
-        obs = self.aug(obs.float())
-        next_obs = self.aug(next_obs.float())
+        if self.image_state_space:
+            obs = self.aug(obs.float())
+            next_obs = self.aug(next_obs.float())
+        else:
+            obs = obs.float()
+            next_obs = next_obs.float()
+
         # encode
         obs = self.encoder(obs)
         with torch.no_grad():

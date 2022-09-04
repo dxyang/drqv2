@@ -4,8 +4,8 @@ defaults:
   - override hydra/launcher: submitit_local
 
 # task settings
-frame_stack: 3
-action_repeat: 2
+frame_stack: 1
+action_repeat: 1
 discount: 0.99
 # train settings
 num_seed_frames: 4000
@@ -15,9 +15,9 @@ num_eval_episodes: 10
 # snapshot
 save_snapshot: false
 # replay buffer
-replay_buffer_size: 1000000
-replay_buffer_num_workers: 4
-nstep: 3
+replay_buffer_size: 100000
+replay_buffer_num_workers: 1
+nstep: 1
 batch_size: 256
 # misc
 seed: 1
@@ -57,6 +57,6 @@ hydra:
     cpus_per_task: 10
     gpus_per_node: 1
     tasks_per_node: 1
-    mem_gb: 160
+    mem_gb: 48
     nodes: 1
     submitit_folder: ./exp/${now:%Y.%m.%d}/${now:%H%M%S}_${agent_cfg.experiment}/.slurm
