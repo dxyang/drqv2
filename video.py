@@ -31,7 +31,9 @@ class VideoRecorder:
                                            width=self.render_size,
                                            camera_id=0)
             else:
-                frame = env.render()
+                frame = env.sim.render(
+                    self.render_size, self.render_size, mode='offscreen', camera_name='topview'
+                )
             self.frames.append(frame)
 
     def save(self, file_name):
@@ -58,11 +60,16 @@ class TrainVideoRecorder:
         self.record(obs)
 
     def record(self, obs):
-        if self.enabled:
-            frame = cv2.resize(obs[-3:].transpose(1, 2, 0),
-                               dsize=(self.render_size, self.render_size),
-                               interpolation=cv2.INTER_CUBIC)
-            self.frames.append(frame)
+        try:
+            if self.enabled:
+                # not needed for metaworld frames
+                # frame = cv2.resize(obs[-3:].transpose(1, 2, 0),
+                #                 dsize=(self.render_size, self.render_size),
+                #                 interpolation=cv2.INTER_CUBIC)
+                frame = obs
+                self.frames.append(frame)
+        except:
+            import pdb; pdb.set_trace()
 
     def save(self, file_name):
         if self.enabled:

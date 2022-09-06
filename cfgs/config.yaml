@@ -23,13 +23,21 @@ batch_size: 256
 seed: 1
 device: cuda
 save_video: true
-save_train_video: false
+save_train_video: true
 use_tb: true
 # experiment
-experiment: exp
+# experiment: metaworld_reach_lowdim_standardreward
+experiment: metaworld_reach_lowdim_customreward
+# experiment: metaworld_reach_img_standardreward
+# experiment: metaworld_reach_img_customreward
 # agent
 lr: 1e-4
 feature_dim: 50
+
+# dxy
+use_image_state_space: False
+use_custom_reward: True
+
 
 agent:
   _target_: drqv2.DrQV2Agent
@@ -48,9 +56,9 @@ agent:
 
 hydra:
   run:
-    dir: ./exp_local/${now:%Y.%m.%d}/${now:%H%M%S}_${hydra.job.override_dirname}
+    dir: ./exp_local/${now:%Y.%m.%d}/${now:%H%M%S}_${experiment}
   sweep:
-    dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
+    dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_sweep_${agent_cfg.experiment}
     subdir: ${hydra.job.num}
   launcher:
     timeout_min: 4300

@@ -9,6 +9,9 @@ import os
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 os.environ['MUJOCO_GL'] = 'egl'
 
+import sys
+sys.path.append(os.path.expanduser("~/code/rewardlearning-vid/"))
+
 from pathlib import Path
 
 import hydra
@@ -26,6 +29,8 @@ from video import TrainVideoRecorder, VideoRecorder
 
 from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE
 
+from models import ConvPolicy, Policy
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 torch.backends.cudnn.benchmark = True
 
@@ -37,6 +42,102 @@ def make_agent(obs_spec, action_spec, cfg):
 
 def process_metaworld_statespace_obs(o):
     return np.concatenate([o[:3], o[-3:]], dtype=np.float32)
+
+class MetaworldWrapper():
+    def __init__(self, env, use_image_state_space: bool, use_custom_reward: bool = False):
+        self._env = env
+        self._use_image_state_space = use_image_state_space
+        self._use_custom_reward = use_custom_reward
+
+        if self._use_custom_reward:
+            if self._use_image_state_space:
+                exp_name = "090122_metaworldreach_imgs"
+                exp_folder = os.path.expanduser(f"~/code/rewardlearning-vid/{exp_name}")
+                assert os.path.exists(exp_folder)
+                ranking_net = ConvPolicy(output_dim=1)
+                ranking_net.load_state_dict(torch.load(f"{exp_folder}/ranking_policy.pt"))
+            else:
+                exp_name = "090122_metaworldreach_state"
+                exp_folder = os.path.expanduser(f"~/code/rewardlearning-vid/{exp_name}")
+                assert os.path.exists(exp_folder)
+                hidden_layer_size = 1000
+                hidden_depth = 3
+                obs_size = 6
+                ranking_net = Policy(obs_size, 1, hidden_layer_size, hidden_depth)
+                ranking_net.load_state_dict(torch.load(f"{exp_folder}/ranking_policy.pt"))
+
+            ranking_net.to(device)
+            ranking_net.eval()
+
+            self.ranking_net = ranking_net
+
+    def _convert_obs_to_timestep(self, obs_dict, step_type, action=None, reward=0.0, info={}):
+        if action is None:
+            action_spec = self.action_spec()
+            action = np.zeros(action_spec.shape, dtype=action_spec.dtype)
+
+        if self._use_image_state_space:
+            obs = np.transpose(obs_dict["image_observation"], (2, 0, 1)) # CHW image
+        else:
+            obs = process_metaworld_statespace_obs(obs_dict["state_observation"]) # state, goal
+
+        if self._use_custom_reward:
+            batch_obs = torch.from_numpy(np.expand_dims(obs, axis=0)).to(device)
+            with torch.no_grad():
+                reward = self.ranking_net(batch_obs).cpu().item()
+
+        return dmc.ExtendedTimeStep(observation=obs,
+                                    step_type=step_type,
+                                    action=action,
+                                    reward=reward,
+                                    discount=1.0)
+
+    def reset(self):
+        _ = self._env.reset()
+
+        goal_size = self._env.goal_space.shape[0]
+        goal_pos = np.random.uniform(low=[-0.3, 0.5, 0.175], high=[0.3, 0.9, 0.175], size=(goal_size,))
+        hand_init = np.random.uniform(low=[0., 0.7, 0.175], high=[0., 0.7, 0.175], size=(goal_size,))
+        obs_dict, obj_pos, goal_pos = self._env.reset_model_ood(goal_pos=goal_pos, hand_pos=hand_init)
+
+        return self._convert_obs_to_timestep(obs_dict, StepType.FIRST)
+
+    def step(self, action):
+        obs_dict, reward, done, info = self._env.step(action)
+        if done:
+            return self._convert_obs_to_timestep(obs_dict, StepType.LAST, action, reward, info)
+        else:
+            return self._convert_obs_to_timestep(obs_dict, StepType.MID, action, reward, info)
+
+    def observation_spec(self):
+        if self._use_image_state_space:
+            pixels_shape = (84, 84, 3)
+            num_frames = 1
+            env_obs_spec = specs.BoundedArray(shape=np.concatenate(
+                [[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
+                                                dtype=np.uint8,
+                                                minimum=0,
+                                                maximum=255,
+                                                name='observation')
+        else:
+            obs_shape = (6,) #self._env.observation_space.shape
+            env_obs_spec = specs.BoundedArray(shape=obs_shape,
+                                                dtype=np.float32,
+                                                minimum=-np.inf,
+                                                maximum=np.inf,
+                                                name='observation')
+        return env_obs_spec
+
+    def action_spec(self):
+        env_action_spec = specs.BoundedArray(shape=(4,),
+                                            dtype=np.float32,
+                                            minimum=-1,
+                                            maximum=1,
+                                            name='action')
+        return env_action_spec
+
+    def __getattr__(self, name):
+        return getattr(self._env, name)
 
 class MetaworldWorkspace:
     def __init__(self, cfg):
@@ -73,84 +174,12 @@ class MetaworldWorkspace:
         self.eval_env._obs_dict_state_space = True
         self.eval_env._do_render_for_obs = True
 
-        class MetaworldWrapper():
-            def __init__(self, env, use_image_state_space: bool, use_custom_reward: bool = False):
-                self._env = env
-                self._use_image_state_space = use_image_state_space
-                self._use_custom_reward = use_custom_reward
-
-                if self._use_custom_reward:
-                    # TODO: load the reawrd model
-                    pass
-
-            def _convert_obs_to_timestep(self, obs_dict, step_type, action=None, reward=0.0, info={}):
-                if action is None:
-                    action_spec = self.action_spec()
-                    action = np.zeros(action_spec.shape, dtype=action_spec.dtype)
-
-                if self._use_custom_reward:
-                    # TODO: pass obs through the reawrd model
-                    pass
-
-
-                if self._use_image_state_space:
-                    chw_img = np.transpose(obs_dict["image_observation"], (2, 0, 1))
-                    return dmc.ExtendedTimeStep(observation=chw_img,
-                                                step_type=step_type,
-                                                action=action,
-                                                reward=reward,
-                                                discount=1.0)
-                else:
-                    state_goal = process_metaworld_statespace_obs(obs_dict["state_observation"])
-                    return dmc.ExtendedTimeStep(observation=state_goal,
-                                                step_type=step_type,
-                                                action=action,
-                                                reward=reward,
-                                                discount=1.0)
-
-            def reset(self):
-                obs_dict = self._env.reset()
-                return self._convert_obs_to_timestep(obs_dict, StepType.FIRST)
-
-            def step(self, action):
-                obs_dict, reward, done, info = self._env.step(action)
-                if done:
-                    return self._convert_obs_to_timestep(obs_dict, StepType.LAST, action, reward, info)
-                else:
-                    return self._convert_obs_to_timestep(obs_dict, StepType.MID, action, reward, info)
-
-            def observation_spec(self):
-                if self._use_image_state_space:
-                    pixels_shape = (84, 84, 3)
-                    num_frames = 1
-                    env_obs_spec = specs.BoundedArray(shape=np.concatenate(
-                        [[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
-                                                        dtype=np.uint8,
-                                                        minimum=0,
-                                                        maximum=255,
-                                                        name='observation')
-                else:
-                    obs_shape = (6,) #self._env.observation_space.shape
-                    env_obs_spec = specs.BoundedArray(shape=obs_shape,
-                                                        dtype=np.float32,
-                                                        minimum=-np.inf,
-                                                        maximum=np.inf,
-                                                        name='observation')
-                return env_obs_spec
-
-            def action_spec(self):
-                env_action_spec = specs.BoundedArray(shape=(4,),
-                                                    dtype=np.float32,
-                                                    minimum=-1,
-                                                    maximum=1,
-                                                    name='action')
-                return env_action_spec
-
-            def __getattr__(self, name):
-                return getattr(self._env, name)
-
-        self.train_env = MetaworldWrapper(self.train_env, False)
-        self.eval_env = MetaworldWrapper(self.eval_env, False)
+        self.train_env = MetaworldWrapper(
+            self.train_env, self.cfg.use_image_state_space,  self.cfg.use_custom_reward
+        )
+        self.eval_env = MetaworldWrapper(
+            self.eval_env, self.cfg.use_image_state_space,  self.cfg.use_custom_reward
+        )
 
         # create replay buffer
         data_specs = (self.train_env.observation_spec(),
@@ -167,11 +196,8 @@ class MetaworldWorkspace:
             self.cfg.save_snapshot, self.cfg.nstep, self.cfg.discount)
         self._replay_iter = None
 
-        self.video_recorder = VideoRecorder(None)
-            #self.work_dir if self.cfg.save_video else None)
-        self.train_video_recorder = TrainVideoRecorder(None)
-            #self.work_dir if self.cfg.save_train_video else None)
-
+        self.video_recorder = VideoRecorder(self.work_dir if self.cfg.save_video else None)
+        self.train_video_recorder = TrainVideoRecorder(self.work_dir if self.cfg.save_train_video else None)
 
     @property
     def global_step(self):
@@ -229,7 +255,15 @@ class MetaworldWorkspace:
         episode_step, episode_reward = 0, 0
         time_step = self.train_env.reset()
         self.replay_storage.add(time_step)
-        self.train_video_recorder.init(time_step.observation)
+
+        if self.cfg.use_image_state_space:
+            obs = np.transpose(time_step.observation["image_observation"], (2, 0, 1)) # CHW image
+        else:
+            obs = self.train_env.sim.render(
+                256, 256, mode='offscreen', camera_name='topview'
+            )
+        self.train_video_recorder.init(obs)
+
         metrics = None
         while train_until_step(self.global_step):
             if time_step.last():
@@ -253,7 +287,14 @@ class MetaworldWorkspace:
                 # reset env
                 time_step = self.train_env.reset()
                 self.replay_storage.add(time_step)
-                self.train_video_recorder.init(time_step.observation)
+                if self.cfg.use_image_state_space:
+                    obs = np.transpose(time_step.observation["image_observation"], (2, 0, 1)) # CHW image
+                else:
+                    obs = self.train_env.sim.render(
+                        256, 256, mode='offscreen', camera_name='topview'
+                    )
+                self.train_video_recorder.init(obs)
+
                 # try to save snapshot
                 if self.cfg.save_snapshot:
                     self.save_snapshot()
@@ -281,7 +322,16 @@ class MetaworldWorkspace:
             time_step = self.train_env.step(action)
             episode_reward += time_step.reward
             self.replay_storage.add(time_step)
-            self.train_video_recorder.record(time_step.observation)
+
+            if self.cfg.use_image_state_space:
+                obs = np.transpose(time_step.observation["image_observation"], (2, 0, 1)) # CHW image
+                self.train_video_recorder.record(obs)
+            else:
+                obs = self.train_env.sim.render(
+                    256, 256, mode='offscreen', camera_name='topview'
+                )
+                self.train_video_recorder.record(obs)
+
             episode_step += 1
             self._global_step += 1
 
