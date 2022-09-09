@@ -20,11 +20,11 @@ import torch
 import dm_env
 from dm_env import StepType, specs
 
-import dmc
-import utils
-from logger import Logger
-from replay_buffer import ReplayBufferStorage, make_replay_loader
-from video import TrainVideoRecorder, VideoRecorder
+import drqv2.dmc as dmc
+import drqv2.utils as utils
+from drqv2.logger import Logger
+from drqv2.replay_buffer import ReplayBufferStorage, make_replay_loader
+from drqv2.video import TrainVideoRecorder, VideoRecorder
 
 
 from metaworld.envs import ALL_V2_ENVIRONMENTS_GOAL_OBSERVABLE

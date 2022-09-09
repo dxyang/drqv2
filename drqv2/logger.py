@@ -10,7 +10,6 @@ import numpy as np
 import torch
 import torchvision
 from termcolor import colored
-from torch.utils.tensorboard import SummaryWriter
 
 COMMON_TRAIN_FORMAT = [('frame', 'F', 'int'), ('step', 'S', 'int'),
                        ('episode', 'E', 'int'), ('episode_length', 'L', 'int'),
@@ -130,6 +129,7 @@ class Logger(object):
         self._eval_mg = MetersGroup(log_dir / 'eval.csv',
                                     formating=COMMON_EVAL_FORMAT)
         if use_tb:
+            from torch.utils.tensorboard import SummaryWriter
             self._sw = SummaryWriter(str(log_dir / 'tb'))
         else:
             self._sw = None
