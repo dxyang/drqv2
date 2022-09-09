@@ -52,13 +52,13 @@ class MetaworldWrapper():
         if self._use_custom_reward:
             if self._use_image_state_space:
                 exp_name = "090122_metaworldreach_imgs"
-                exp_folder = os.path.expanduser(f"~/code/rewardlearning-vid/{exp_name}")
+                exp_folder = os.path.expanduser(f"~/code/rewardlearning-vid/output-exps/{exp_name}")
                 assert os.path.exists(exp_folder)
                 ranking_net = ConvPolicy(output_dim=1)
                 ranking_net.load_state_dict(torch.load(f"{exp_folder}/ranking_policy.pt"))
             else:
                 exp_name = "090122_metaworldreach_state"
-                exp_folder = os.path.expanduser(f"~/code/rewardlearning-vid/{exp_name}")
+                exp_folder = os.path.expanduser(f"~/code/rewardlearning-vid/output-exps/{exp_name}")
                 assert os.path.exists(exp_folder)
                 hidden_layer_size = 1000
                 hidden_depth = 3
