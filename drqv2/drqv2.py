@@ -164,7 +164,13 @@ class DrQV2Agent:
         if self.image_state_space:
             self.encoder = Encoder(obs_shape).to(device)
         else:
-            self.encoder = FeatureEncoder(6, 256, 128, 2).to(device)
+            feature_dim = obs_shape[0]
+            if feature_dim == 6:
+                self.encoder = FeatureEncoder(feature_dim, 256, 128, 2).to(device)
+            elif feature_dim == 512:
+                self.encoder = FeatureEncoder(feature_dim, 1024, 128, 2).to(device)
+            else:
+                assert False # unexpected
         self.actor = Actor(self.encoder.repr_dim, action_shape, feature_dim,
                            hidden_dim).to(device)
 

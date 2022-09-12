@@ -376,7 +376,7 @@ class Workspace:
         self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                  self.cfg.action_repeat, self.cfg.seed)
         # create replay buffer
-        data_specs = (self.train_env.observation_spec(),
+        data_specs = (self.train_env.observation_spec(), # 3, 84, 84 uint8 0-255
                       self.train_env.action_spec(),
                       specs.Array((1,), np.float32, 'reward'),
                       specs.Array((1,), np.float32, 'discount'))
@@ -394,7 +394,6 @@ class Workspace:
             self.work_dir if self.cfg.save_video else None)
         self.train_video_recorder = TrainVideoRecorder(
             self.work_dir if self.cfg.save_train_video else None)
-
 
     @property
     def global_step(self):
@@ -503,7 +502,6 @@ class Workspace:
 
             # take env step
             time_step = self.train_env.step(action)
-            print(time_step.discount)
             episode_reward += time_step.reward
             self.replay_storage.add(time_step)
             self.train_video_recorder.record(time_step.observation)
@@ -528,8 +526,8 @@ class Workspace:
 
 @hydra.main(config_path='cfgs', config_name='config')
 def main(cfg):
-    from train import MetaworldWorkspace as W
-    # from train import Workspace as W
+    # from train import MetaworldWorkspace as W
+    from drqv2.train import Workspace as W
     root_dir = Path.cwd()
     workspace = W(cfg)
     snapshot = root_dir / 'snapshot.pt'
