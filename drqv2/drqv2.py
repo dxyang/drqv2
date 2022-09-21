@@ -165,8 +165,8 @@ class DrQV2Agent:
             self.encoder = Encoder(obs_shape).to(device)
         else:
             feature_dim = obs_shape[0]
-            if feature_dim == 6:
-                self.encoder = FeatureEncoder(feature_dim, 256, 128, 2).to(device)
+            if feature_dim in (6, 9, 10, 17):
+                self.encoder = FeatureEncoder(feature_dim, 512, 128, 2).to(device)
             elif feature_dim == 512:
                 self.encoder = FeatureEncoder(feature_dim, 1024, 128, 2).to(device)
             else:
