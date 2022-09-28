@@ -8,14 +8,17 @@ import numpy as np
 
 
 class VideoRecorder:
-    def __init__(self, root_dir, render_size=256, fps=20):
+    def __init__(self, root_dir, folder_name = 'eval_video', render_size=256, fps=20):
         if root_dir is not None:
-            self.save_dir = root_dir / 'eval_video'
+            self.save_dir = root_dir / folder_name
             self.save_dir.mkdir(exist_ok=True)
         else:
             self.save_dir = None
 
         self.render_size = render_size
+        if render_size % 16 != 0:
+            print(f"making render size for the eval video recorder a multiple of 16")
+            self.render_size = (render_size // 16 + 1) * 16
         self.fps = fps
         self.frames = []
 
@@ -57,11 +60,20 @@ class TrainVideoRecorder:
     def init(self, obs, enabled=True):
         self.frames = []
         self.enabled = self.save_dir is not None and enabled
+        if obs.shape[1] % 16 != 0:
+            self.render_size = (obs.shape[1] // 16 + 1) * 16
         self.record(obs)
 
     def record(self, obs):
         try:
             if self.enabled:
+                if obs.shape[1] % 16 != 0:
+                    # resize to multiple of 16
+                    frame = cv2.resize(
+                        obs,
+                        dsize=(self.render_size, self.render_size),
+                        interpolation=cv2.INTER_CUBIC
+                    )
                 # not needed for metaworld frames
                 # frame = cv2.resize(obs[-3:].transpose(1, 2, 0),
                 #                 dsize=(self.render_size, self.render_size),
