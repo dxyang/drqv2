@@ -67,7 +67,8 @@ class TrainVideoRecorder:
     def record(self, obs):
         try:
             if self.enabled:
-                if obs.shape[1] % 16 != 0:
+                frame = obs
+                if frame.shape[1] % 16 != 0:
                     # resize to multiple of 16
                     frame = cv2.resize(
                         obs,
@@ -78,7 +79,6 @@ class TrainVideoRecorder:
                 # frame = cv2.resize(obs[-3:].transpose(1, 2, 0),
                 #                 dsize=(self.render_size, self.render_size),
                 #                 interpolation=cv2.INTER_CUBIC)
-                frame = obs
                 self.frames.append(frame)
         except:
             import pdb; pdb.set_trace()
