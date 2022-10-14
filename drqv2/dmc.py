@@ -18,7 +18,8 @@ class ExtendedTimeStep(NamedTuple):
     discount: Any
     observation: Any
     action: Any
-    og_reward: Any    # lets us store the default environment reward on the side as well
+    og_reward: Any               # store the default environment reward on the side as well
+    metaworld_state_obs: Any     # compatibility with heuristic policies
 
     def first(self):
         return self.step_type == StepType.FIRST
