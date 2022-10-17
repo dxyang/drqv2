@@ -18,6 +18,7 @@ class ExtendedTimeStep(NamedTuple):
     discount: Any
     observation: Any
     action: Any
+    success: Any                 # metaworld info['success'] value
     og_reward: Any               # store the default environment reward on the side as well
     metaworld_state_obs: Any     # compatibility with heuristic policies
 
