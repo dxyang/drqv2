@@ -46,9 +46,12 @@ class VideoRecorder:
 
 
 class TrainVideoRecorder:
-    def __init__(self, root_dir, render_size=256, fps=20):
+    '''
+    this video recorder like it's obs to come in HWC format!
+    '''
+    def __init__(self, root_dir, folder_name = 'train_video', render_size=256, fps=20):
         if root_dir is not None:
-            self.save_dir = root_dir / 'train_video'
+            self.save_dir = root_dir / folder_name
             self.save_dir.mkdir(exist_ok=True)
         else:
             self.save_dir = None

@@ -162,7 +162,11 @@ class DrQV2Agent:
 
         # models
         if self.image_state_space:
+            # low res 84, 84 images
             self.encoder = Encoder(obs_shape).to(device)
+
+            # should probably add some logic to either use a resnet or r3m for
+            # higher dimensional inputs
         else:
             input_dim = obs_shape[0]
             if input_dim in (6, 9, 10, 17):

@@ -143,6 +143,24 @@ class ReplayBuffer(IterableDataset):
             if not self._store_episode(eps_fn):
                 break
 
+    def _try_fetch_most_recent(self, num_most_recent=100):
+        if self._samples_since_last_fetch < self._fetch_every:
+            return
+        self._samples_since_last_fetch = 0
+        worker_id = 0
+        eps_fns = sorted(self._replay_dir.glob('*.npz'), reverse=True)
+        fetched_size = 0
+        for eps_fn in eps_fns[:num_most_recent]:
+            eps_idx, eps_len = [int(x) for x in eps_fn.stem.split('_')[1:]]
+            if eps_fn in self._episodes.keys():
+                break
+            if fetched_size + eps_len > self._max_size:
+                break
+            fetched_size += eps_len
+            if not self._store_episode(eps_fn):
+                break
+
+
     def _sample(self):
         try:
             self._try_fetch()
