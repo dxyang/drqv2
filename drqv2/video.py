@@ -8,13 +8,14 @@ import numpy as np
 
 
 class VideoRecorder:
-    def __init__(self, root_dir, folder_name = 'eval_video', render_size=256, fps=20):
+    def __init__(self, root_dir, folder_name = 'eval_video', render_size=256, fps=20, camera_name='topview'):
         if root_dir is not None:
             self.save_dir = root_dir / folder_name
             self.save_dir.mkdir(exist_ok=True)
         else:
             self.save_dir = None
 
+        self.camera_name = camera_name
         self.render_size = render_size
         if render_size % 16 != 0:
             print(f"making render size for the eval video recorder a multiple of 16")
@@ -35,7 +36,7 @@ class VideoRecorder:
                                            camera_id=0)
             else:
                 frame = env.sim.render(
-                    self.render_size, self.render_size, mode='offscreen', camera_name='topview'
+                    self.render_size, self.render_size, mode='offscreen', camera_name=self.camera_name
                 )
             self.frames.append(frame)
 
