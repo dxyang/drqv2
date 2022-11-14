@@ -10,6 +10,8 @@ import torch.nn.functional as F
 
 import drqv2.utils as utils
 
+from r3m import load_r3m
+
 
 class RandomShiftsAug(nn.Module):
     def __init__(self, pad):
@@ -145,6 +147,45 @@ class Critic(nn.Module):
 
         return q1, q2
 
+class R3MFeatureExtractor(nn.Module):
+    def __init__(
+        self,
+        do_multiply_255: bool = True,
+        freeze_backbone: bool = True,
+    ):
+        super(R3MFeatureExtractor, self).__init__()
+
+        # get the backbone
+        self.r3m = load_r3m("resnet18") # resnet18, resnet34, resnet50
+
+        self.freeze_r3m = freeze_backbone
+        if self.freeze_r3m:
+            self.r3m.eval()
+            for param in self.r3m.parameters():
+                param.requires_grad = False
+
+        self.r3m_embedding_dim = 512
+        self.repr_dim = self.r3m_embedding_dim
+
+        self.do_multiply_255 = do_multiply_255
+
+    def forward(self, x: torch.Tensor):
+        # x for drqv2 standpoint is 0-255 uint8 so make it a float
+        x = x.float()
+
+        # r3m expects things to be [0-255] instead of [0-1]!!!
+        if self.do_multiply_255:
+            x = x * 255.0
+
+        # some computational savings
+        if self.freeze_r3m:
+            with torch.no_grad():
+                x = self.r3m(x)
+        else:
+            x = self.r3m(x)
+
+        return x
+
 
 class DrQV2Agent:
     def __init__(self, obs_shape, action_shape, device, lr, feature_dim,
@@ -162,11 +203,10 @@ class DrQV2Agent:
 
         # models
         if self.image_state_space:
-            # low res 84, 84 images
-            self.encoder = Encoder(obs_shape).to(device)
-
-            # should probably add some logic to either use a resnet or r3m for
-            # higher dimensional inputs
+            if obs_shape == (3, 84, 84):
+                self.encoder = Encoder(obs_shape).to(device)
+            elif obs_shape == (3, 224, 224):
+                self.encoder = R3MFeatureExtractor(do_multiply_255=False).to(device)
         else:
             input_dim = obs_shape[0]
             if input_dim in (6, 9, 10, 17):
