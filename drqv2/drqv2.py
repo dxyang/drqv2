@@ -156,7 +156,7 @@ class R3MFeatureExtractor(nn.Module):
         super(R3MFeatureExtractor, self).__init__()
 
         # get the backbone
-        self.r3m = load_r3m("resnet18") # resnet18, resnet34, resnet50
+        self.r3m = load_r3m("resnet50") # resnet18, resnet34, resnet50
 
         self.freeze_r3m = freeze_backbone
         if self.freeze_r3m:
@@ -164,7 +164,7 @@ class R3MFeatureExtractor(nn.Module):
             for param in self.r3m.parameters():
                 param.requires_grad = False
 
-        self.r3m_embedding_dim = 512
+        self.r3m_embedding_dim = 2048
         self.repr_dim = self.r3m_embedding_dim
 
         self.do_multiply_255 = do_multiply_255
@@ -190,7 +190,8 @@ class R3MFeatureExtractor(nn.Module):
 class DrQV2Agent:
     def __init__(self, obs_shape, action_shape, device, lr, feature_dim,
                  hidden_dim, critic_target_tau, num_expl_steps,
-                 update_every_steps, stddev_schedule, stddev_clip, use_tb):
+                 update_every_steps, stddev_schedule, stddev_clip, use_tb,
+                 with_ppc):
         self.device = device
         self.critic_target_tau = critic_target_tau
         self.update_every_steps = update_every_steps
@@ -200,13 +201,28 @@ class DrQV2Agent:
         self.stddev_clip = stddev_clip
 
         self.image_state_space = len(obs_shape) == 3
+        self.with_ppc = with_ppc
 
         # models
+        is_highres = False
         if self.image_state_space:
             if obs_shape == (3, 84, 84):
                 self.encoder = Encoder(obs_shape).to(device)
             elif obs_shape == (3, 224, 224):
+                is_highres = True
                 self.encoder = R3MFeatureExtractor(do_multiply_255=False).to(device)
+
+            proprioception_dim = 0
+            if self.with_ppc:
+                proprioception_dim = 4 # for metaworld, this is hand xyz and gripper state
+
+            self.actor = Actor(self.encoder.repr_dim + proprioception_dim, action_shape, feature_dim,
+                            hidden_dim).to(device)
+
+            self.critic = Critic(self.encoder.repr_dim + proprioception_dim, action_shape, feature_dim,
+                                hidden_dim).to(device)
+            self.critic_target = Critic(self.encoder.repr_dim + proprioception_dim, action_shape,
+                                        feature_dim, hidden_dim).to(device)
         else:
             input_dim = obs_shape[0]
             if input_dim in (6, 9, 10, 17):
@@ -215,13 +231,15 @@ class DrQV2Agent:
                 self.encoder = FeatureEncoder(input_dim, 1024, 128, 2).to(device)
             else:
                 assert False # unexpected
-        self.actor = Actor(self.encoder.repr_dim, action_shape, feature_dim,
-                           hidden_dim).to(device)
 
-        self.critic = Critic(self.encoder.repr_dim, action_shape, feature_dim,
-                             hidden_dim).to(device)
-        self.critic_target = Critic(self.encoder.repr_dim, action_shape,
-                                    feature_dim, hidden_dim).to(device)
+            self.actor = Actor(self.encoder.repr_dim, action_shape, feature_dim,
+                            hidden_dim).to(device)
+
+            self.critic = Critic(self.encoder.repr_dim, action_shape, feature_dim,
+                                hidden_dim).to(device)
+            self.critic_target = Critic(self.encoder.repr_dim, action_shape,
+                                        feature_dim, hidden_dim).to(device)
+
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizers
@@ -230,7 +248,11 @@ class DrQV2Agent:
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=lr)
 
         # data augmentation
-        self.aug = RandomShiftsAug(pad=4)
+        if is_highres:
+            #84x84 => pad=4 so for 224x224 let's triple it roughly?
+            self.aug = RandomShiftsAug(pad=12)
+        else:
+            self.aug = RandomShiftsAug(pad=4)
 
         self.train()
         self.critic_target.train()
@@ -241,9 +263,16 @@ class DrQV2Agent:
         self.actor.train(training)
         self.critic.train(training)
 
-    def act(self, obs, step, eval_mode):
+    def act(self, obs, step, eval_mode, proprioception=None):
         obs = torch.as_tensor(obs, device=self.device)
         obs = self.encoder(obs.unsqueeze(0))
+
+        if self.image_state_space:
+            if self.with_ppc:
+                assert proprioception is not None
+                ppc = torch.as_tensor(proprioception, device=self.device).unsqueeze(0)
+                obs = torch.cat([obs, ppc], dim=1)
+
         stddev = utils.schedule(self.stddev_schedule, step)
         dist = self.actor(obs, stddev)
         if eval_mode:
@@ -314,7 +343,7 @@ class DrQV2Agent:
             return metrics
 
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs = utils.to_torch(
+        obs, action, reward, discount, next_obs, ppc, next_ppc = utils.to_torch(
             batch, self.device)
 
         # augment
@@ -327,8 +356,12 @@ class DrQV2Agent:
 
         # encode
         obs = self.encoder(obs)
+        if self.with_ppc:
+            obs = torch.cat([obs, ppc], dim=1)
         with torch.no_grad():
             next_obs = self.encoder(next_obs)
+            if self.with_ppc:
+                next_obs = torch.cat([next_obs, next_ppc], dim=1)
 
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()
