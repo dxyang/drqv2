@@ -37,6 +37,57 @@ class ExtendedTimeStep(NamedTuple):
         else:
             return tuple.__getitem__(self, attr)
 
+class ImageExtendedTimeStep(NamedTuple):
+    step_type: Any
+    reward: Any
+    discount: Any
+    observation: Any
+    action: Any
+    success: Any                 # metaworld info['success'] value
+    og_reward: Any               # store the default environment reward on the side as well
+    metaworld_state_obs: Any     # compatibility with heuristic policies
+    image: Any
+
+    def first(self):
+        return self.step_type == StepType.FIRST
+
+    def mid(self):
+        return self.step_type == StepType.MID
+
+    def last(self):
+        return self.step_type == StepType.LAST
+
+    def __getitem__(self, attr):
+        if isinstance(attr, str):
+            return getattr(self, attr)
+        else:
+            return tuple.__getitem__(self, attr)
+
+class StateExtendedTimeStep(NamedTuple):
+    step_type: Any
+    reward: Any
+    discount: Any
+    observation: Any
+    action: Any
+    success: Any                 # metaworld info['success'] value
+    og_reward: Any               # store the default environment reward on the side as well
+    metaworld_state_obs: Any     # compatibility with heuristic policies
+    lowdimstate: Any
+
+    def first(self):
+        return self.step_type == StepType.FIRST
+
+    def mid(self):
+        return self.step_type == StepType.MID
+
+    def last(self):
+        return self.step_type == StepType.LAST
+
+    def __getitem__(self, attr):
+        if isinstance(attr, str):
+            return getattr(self, attr)
+        else:
+            return tuple.__getitem__(self, attr)
 
 class ActionRepeatWrapper(dm_env.Environment):
     def __init__(self, env, num_repeats):

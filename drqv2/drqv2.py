@@ -356,11 +356,11 @@ class DrQV2Agent:
 
         # encode
         obs = self.encoder(obs)
-        if self.with_ppc:
+        if self.image_state_space and self.with_ppc:
             obs = torch.cat([obs, ppc], dim=1)
         with torch.no_grad():
             next_obs = self.encoder(next_obs)
-            if self.with_ppc:
+            if self.image_state_space and self.with_ppc:
                 next_obs = torch.cat([next_obs, next_ppc], dim=1)
 
         if self.use_tb:
