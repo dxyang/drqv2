@@ -12,6 +12,7 @@ import drqv2.utils as utils
 
 from r3m import load_r3m
 
+from reward_extraction.data import H5PyTrajDset
 
 class RandomShiftsAug(nn.Module):
     def __init__(self, pad):
@@ -212,16 +213,16 @@ class DrQV2Agent:
                 is_highres = True
                 self.encoder = R3MFeatureExtractor(do_multiply_255=False).to(device)
 
-            proprioception_dim = 0
+            self.proprioception_dim = 0
             if self.with_ppc:
-                proprioception_dim = 4 # for metaworld, this is hand xyz and gripper state
+                self.proprioception_dim = 4 # for metaworld, this is hand xyz and gripper state
 
-            self.actor = Actor(self.encoder.repr_dim + proprioception_dim, action_shape, feature_dim,
+            self.actor = Actor(self.encoder.repr_dim + self.proprioception_dim, action_shape, feature_dim,
                             hidden_dim).to(device)
 
-            self.critic = Critic(self.encoder.repr_dim + proprioception_dim, action_shape, feature_dim,
+            self.critic = Critic(self.encoder.repr_dim + self.proprioception_dim, action_shape, feature_dim,
                                 hidden_dim).to(device)
-            self.critic_target = Critic(self.encoder.repr_dim + proprioception_dim, action_shape,
+            self.critic_target = Critic(self.encoder.repr_dim + self.proprioception_dim, action_shape,
                                         feature_dim, hidden_dim).to(device)
         else:
             input_dim = obs_shape[0]
@@ -378,3 +379,66 @@ class DrQV2Agent:
                                  self.critic_target_tau)
 
         return metrics
+
+    def bc_init_agent(self, bc_dataset: H5PyTrajDset, num_steps: int, num_trajs: int, batch_size: int = 64):
+        TRAJ_HORIZON = 100
+        from tqdm import tqdm
+        import matplotlib.pyplot as plt
+        import pickle
+        import os
+
+        work_dir = os.path.dirname(bc_dataset.save_path)
+
+        losses = []
+
+        for i in tqdm(range(num_steps)):
+            # extract observation from bc dataset
+            traj_idxs = np.random.randint(num_trajs, size=(batch_size,))
+            time_idxs = np.random.randint(TRAJ_HORIZON, size=(batch_size,))
+
+            trajectories = [bc_dataset[traj_idx] for traj_idx in traj_idxs]
+            s_ts = []
+            a_ts = []
+            metaworld_s_ts = []
+            for traj, t_idx in zip(trajectories, time_idxs):
+                s_ts.append(traj[0][t_idx])
+                a_ts.append(traj[1][t_idx])
+                metaworld_s_ts.append(traj[4][t_idx])
+            obss = torch.as_tensor(np.array(s_ts), device=self.device)
+            a_ts = torch.as_tensor(np.array(a_ts), device=self.device)
+            metaworld_s_ts = torch.as_tensor(np.array(metaworld_s_ts), device=self.device)
+
+            # preproces observation fancily
+            obss = self.encoder(obss)
+            if self.image_state_space:
+                if self.with_ppc:
+                    ppcs = metaworld_s_ts[:, :self.proprioception_dim]
+                    ppcs = torch.as_tensor(ppcs, device=self.device)
+                    obss = torch.cat([obss, ppcs], dim=1)
+
+            # forward pass
+            stddev = utils.schedule(self.stddev_schedule, 0)
+            dist = self.actor(obss, stddev)
+            action_hats = dist.mean
+
+            # supervised loss
+            mse_loss = nn.MSELoss()
+            loss = mse_loss(a_ts, action_hats)
+
+            # do the grad thing
+            self.actor_opt.zero_grad(set_to_none=True)
+            loss.backward()
+            self.actor_opt.step()
+
+            losses.append(loss.detach().item())
+
+            if i % 1000 == 0 or i == num_steps - 1:
+                losses_np = np.array(losses)
+                plt.clf(); plt.cla()
+                plt.plot(losses_np, label="train", color='blue')
+                plt.savefig(f"{work_dir}/bc_loss.png")
+                losses_dict = {
+                    "losses": losses_np,
+                }
+                pickle.dump(losses_dict, open(f"{work_dir}/bc_losses.pkl", "wb"))
+
