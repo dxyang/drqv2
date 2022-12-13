@@ -157,7 +157,7 @@ class R3MFeatureExtractor(nn.Module):
         super(R3MFeatureExtractor, self).__init__()
 
         # get the backbone
-        self.r3m = load_r3m("resnet50") # resnet18, resnet34, resnet50
+        self.r3m = load_r3m("resnet18") # resnet18, resnet34, resnet50
 
         self.freeze_r3m = freeze_backbone
         if self.freeze_r3m:
@@ -165,7 +165,7 @@ class R3MFeatureExtractor(nn.Module):
             for param in self.r3m.parameters():
                 param.requires_grad = False
 
-        self.r3m_embedding_dim = 2048
+        self.r3m_embedding_dim = 512 # for resnet 18 - 512, for resnet50 - 2048
         self.repr_dim = self.r3m_embedding_dim
 
         self.do_multiply_255 = do_multiply_255
