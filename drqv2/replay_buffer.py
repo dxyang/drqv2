@@ -177,8 +177,10 @@ class ReplayBuffer(IterableDataset):
         discount = np.ones_like(episode['discount'][idx])
 
         # hack for metaworld proprioception (hand xyz gripper)
-        ppc = episode['metaworld_state_obs'][idx - 1][:4]
-        next_ppc = episode['metaworld_state_obs'][idx][:4]
+        ppc, next_ppc = np.zeros(4), np.zeros(4) # hack on a hack /shrug
+        if 'metaworld_state_obs' in episode:
+            ppc = episode['metaworld_state_obs'][idx - 1][:4]
+            next_ppc = episode['metaworld_state_obs'][idx][:4]
 
         for i in range(self._nstep):
             step_reward = episode['reward'][idx + i]

@@ -11,6 +11,32 @@ from dm_control import manipulation, suite
 from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs
 
+class KitchenTimeStep(NamedTuple):
+    step_type: Any
+    reward: Any
+    discount: Any
+    observation: Any
+    image: Any
+    image_goal: Any
+    action: Any
+    success: Any
+    og_reward: Any               # store the default environment reward on the side as well
+
+    def first(self):
+        return self.step_type == StepType.FIRST
+
+    def mid(self):
+        return self.step_type == StepType.MID
+
+    def last(self):
+        return self.step_type == StepType.LAST
+
+    def __getitem__(self, attr):
+        if isinstance(attr, str):
+            return getattr(self, attr)
+        else:
+            return tuple.__getitem__(self, attr)
+
 
 class ExtendedTimeStep(NamedTuple):
     step_type: Any

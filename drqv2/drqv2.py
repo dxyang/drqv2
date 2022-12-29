@@ -226,7 +226,9 @@ class DrQV2Agent:
                                         feature_dim, hidden_dim).to(device)
         else:
             input_dim = obs_shape[0]
-            if input_dim in (6, 9, 10, 17):
+            METAWORLD_FEATURE_DIMS = (6, 9, 10, 17)
+            KITCHEN_FEATURE_DIMS = (60,)
+            if input_dim in METAWORLD_FEATURE_DIMS or input_dim in KITCHEN_FEATURE_DIMS:
                 self.encoder = FeatureEncoder(input_dim, 512, 128, 2).to(device)
             elif input_dim == 512:
                 self.encoder = FeatureEncoder(input_dim, 1024, 128, 2).to(device)

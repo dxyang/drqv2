@@ -48,6 +48,17 @@ class VideoRecorder:
             path = self.save_dir / file_name
             imageio.mimsave(str(path), self.frames, fps=self.fps)
 
+class KitchenVideoRecorder(VideoRecorder):
+    def record(self, env):
+        if self.enabled:
+            frame = env.sim.render(
+                self.render_size, self.render_size, mode='offscreen', camera_name=self.camera_name
+            )
+            if self.camera_name in ["topview", "top_cap2", "left_cap2", "right_cap2"]:
+                frame = np.flipud(frame)
+
+            self.frames.append(frame)
+
 
 class TrainVideoRecorder:
     '''
