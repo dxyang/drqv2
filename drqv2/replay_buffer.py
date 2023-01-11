@@ -181,6 +181,9 @@ class ReplayBuffer(IterableDataset):
         if 'metaworld_state_obs' in episode:
             ppc = episode['metaworld_state_obs'][idx - 1][:4]
             next_ppc = episode['metaworld_state_obs'][idx][:4]
+        # if 'kitchen_state_obs' in episode:
+        #     ppc = episode['metaworld_state_obs'][idx - 1][:4]
+        #     next_ppc = episode['metaworld_state_obs'][idx][:4]
 
         for i in range(self._nstep):
             step_reward = episode['reward'][idx + i]
