@@ -19,6 +19,7 @@ class KitchenTimeStep(NamedTuple):
     image: Any
     image_goal: Any
     kitchen_state_obs: Any
+    proprioception: Any
     action: Any
     success: Any
     og_reward: Any               # store the default environment reward on the side as well

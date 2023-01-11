@@ -192,7 +192,7 @@ class DrQV2Agent:
     def __init__(self, obs_shape, action_shape, device, lr, feature_dim,
                  hidden_dim, critic_target_tau, num_expl_steps,
                  update_every_steps, stddev_schedule, stddev_clip, use_tb,
-                 with_ppc):
+                 with_ppc, proprioception_dim):
         self.device = device
         self.critic_target_tau = critic_target_tau
         self.update_every_steps = update_every_steps
@@ -215,7 +215,9 @@ class DrQV2Agent:
 
             self.proprioception_dim = 0
             if self.with_ppc:
-                self.proprioception_dim = 4 # for metaworld, this is hand xyz and gripper state
+                # for metaworld, this is hand xyz and gripper state (size 4)
+                # for kitchen, this is size 16
+                self.proprioception_dim = proprioception_dim
 
             self.actor = Actor(self.encoder.repr_dim + self.proprioception_dim, action_shape, feature_dim,
                             hidden_dim).to(device)
