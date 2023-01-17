@@ -207,6 +207,7 @@ class DrQV2Agent:
         # models
         is_highres = False
         if self.image_state_space:
+            print(f"[drqv2agent] image state space!")
             if obs_shape == (3, 84, 84):
                 self.encoder = Encoder(obs_shape).to(device)
             elif obs_shape == (3, 224, 224):
@@ -227,6 +228,7 @@ class DrQV2Agent:
             self.critic_target = Critic(self.encoder.repr_dim + self.proprioception_dim, action_shape,
                                         feature_dim, hidden_dim).to(device)
         else:
+            print(f"[drqv2agent] low dim state space!")
             input_dim = obs_shape[0]
             METAWORLD_FEATURE_DIMS = (6, 9, 10, 17)
             KITCHEN_FEATURE_DIMS = (60,)
