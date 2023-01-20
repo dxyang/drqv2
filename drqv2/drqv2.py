@@ -319,7 +319,21 @@ class DrQV2Agent:
 
         return metrics
 
-    def update_actor(self, obs, step):
+    def calculate_log_prob(self, obs, step, action, encode_obs=True):
+        # encode
+        if encode_obs:
+            with torch.no_grad():
+                obs = self.encoder(obs)
+            if self.image_state_space:
+                assert not self.with_ppc
+            obs = obs.detach()
+
+        stddev = utils.schedule(self.stddev_schedule, step)
+        dist = self.actor(obs, stddev)
+        log_prob = dist.log_prob(action).sum(-1, keepdim=True)
+        return log_prob
+
+    def update_actor(self, obs, step, imitation_loss: torch.Tensor=None):
         metrics = dict()
 
         stddev = utils.schedule(self.stddev_schedule, step)
@@ -334,16 +348,21 @@ class DrQV2Agent:
         # optimize actor
         self.actor_opt.zero_grad(set_to_none=True)
         actor_loss.backward()
+        if imitation_loss is not None:
+            imitation_loss.backward()
         self.actor_opt.step()
 
         if self.use_tb:
             metrics['actor_loss'] = actor_loss.item()
+            if imitation_loss is not None:
+                metrics['imitation_loss'] = imitation_loss.item()
             metrics['actor_logprob'] = log_prob.mean().item()
             metrics['actor_ent'] = dist.entropy().sum(dim=-1).mean().item()
 
         return metrics
 
-    def update(self, replay_iter, step):
+
+    def update(self, replay_iter, step, imitation_loss: torch.Tensor = None):
         metrics = dict()
 
         if step % self.update_every_steps != 0:
@@ -378,7 +397,7 @@ class DrQV2Agent:
             self.update_critic(obs, action, reward, discount, next_obs, step))
 
         # update actor
-        metrics.update(self.update_actor(obs.detach(), step))
+        metrics.update(self.update_actor(obs.detach(), step, imitation_loss))
 
         # update critic target
         utils.soft_update_params(self.critic, self.critic_target,
