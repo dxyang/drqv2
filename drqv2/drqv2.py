@@ -361,6 +361,20 @@ class DrQV2Agent:
 
         return metrics
 
+    def update_actor_with_other_loss(self, loss: torch.Tensor, update_encoder: bool = True):
+        metrics = dict()
+
+        if update_encoder:
+            self.encoder_opt.zero_grad(set_to_none=True)
+        self.actor_opt.zero_grad(set_to_none=True)
+        loss.backward()
+        self.actor_opt.step()
+        if update_encoder:
+            self.encoder_opt.step()
+
+        if self.use_tb:
+            metrics['actor_loss'] = loss.item()
+        return metrics
 
     def update(self, replay_iter, step, imitation_loss: torch.Tensor = None):
         metrics = dict()
