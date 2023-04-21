@@ -176,20 +176,23 @@ class ReplayBuffer(IterableDataset):
         reward = np.zeros_like(episode['reward'][idx])
         discount = np.ones_like(episode['discount'][idx])
 
-        # hack for metaworld proprioception (hand xyz gripper)
-        ppc, next_ppc = np.zeros(4), np.zeros(4) # hack on a hack /shrug
+        # ppc, next_ppc = np.zeros(4), np.zeros(4) # hack on a hack /shrug
         if 'metaworld_state_obs' in episode:
+            # ppc is hand xyz + gripper
             ppc = episode['metaworld_state_obs'][idx - 1][:4]
             next_ppc = episode['metaworld_state_obs'][idx][:4]
+            goal = episode['metaworld_state_obs'][idx - 1][-3:]
         elif 'proprioception' in episode:
+            # ppc from what lexa used
             ppc = episode['proprioception'][idx - 1][:]
             next_ppc = episode['proprioception'][idx][:]
+            goal = None
 
         for i in range(self._nstep):
             step_reward = episode['reward'][idx + i]
             reward += discount * step_reward
             discount *= episode['discount'][idx + i] * self._discount
-        return (obs, action, reward, discount, next_obs, ppc, next_ppc)
+        return (obs, action, reward, discount, next_obs, ppc, next_ppc, goal)
 
     def __iter__(self):
         while True:

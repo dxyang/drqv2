@@ -2,6 +2,8 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+from typing import Union
+
 import hydra
 import numpy as np
 import torch
@@ -13,6 +15,7 @@ import drqv2.utils as utils
 from r3m import load_r3m
 
 from reward_extraction.data import H5PyTrajDset
+from reward_extraction.reward_functions import LearnedRewardFunction, LearnedImageRewardFunction
 
 class RandomShiftsAug(nn.Module):
     def __init__(self, pad):
@@ -376,15 +379,31 @@ class DrQV2Agent:
             metrics['actor_loss'] = loss.item()
         return metrics
 
-    def update(self, replay_iter, step, imitation_loss: torch.Tensor = None):
+    def update(
+        self, replay_iter, step,
+        imitation_loss: torch.Tensor = None,
+        lrf: LearnedRewardFunction =  None, # sometimes we must recalculate the reward
+        goal_image: np.ndarray = None, # when goal_image is not None, this overrides whatever the replay buffer returns as the goal
+        airl_style_reward: bool = False,
+    ):
         metrics = dict()
 
         if step % self.update_every_steps != 0:
             return metrics
 
         batch = next(replay_iter)
-        obs, action, reward, discount, next_obs, ppc, next_ppc = utils.to_torch(
+        obs, action, reward, discount, next_obs, ppc, next_ppc, goal = utils.to_torch(
             batch, self.device)
+
+        # refresh stale reward
+        if lrf is not None:
+            if goal_image is not None:
+                # do something fancy
+                assert goal is None
+                bs = obs.size()[0]
+                goal = torch.cat([np.expand_dims(goal_image, axis=0) for _ in bs]).to(self.device).float()
+
+            reward = lrf._calculate_reward(obs, goal, airl_style_reward=airl_style_reward)
 
         # augment
         if self.image_state_space:
