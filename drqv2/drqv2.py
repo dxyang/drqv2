@@ -399,11 +399,12 @@ class DrQV2Agent:
         if lrf is not None:
             if goal_image is not None:
                 # do something fancy
-                assert goal is None
-                bs = obs.size()[0]
-                goal = torch.cat([np.expand_dims(goal_image, axis=0) for _ in bs]).to(self.device).float()
+                assert torch.allclose(goal.float(), torch.Tensor([0.0]).to(self.device))
+                batch_size = obs.size()[0]
+                goal_np = np.concatenate([np.expand_dims(goal_image, axis=0) for _ in range(batch_size)])
+                goal = torch.from_numpy(goal_np).to(self.device).byte()
 
-            reward = lrf._calculate_reward(obs, goal, airl_style_reward=airl_style_reward)
+            reward = torch.Tensor(lrf._calculate_reward(obs, goal, airl_style_reward=airl_style_reward)).to(self.device).float()
 
         # augment
         if self.image_state_space:

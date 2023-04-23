@@ -186,7 +186,7 @@ class ReplayBuffer(IterableDataset):
             # ppc from what lexa used
             ppc = episode['proprioception'][idx - 1][:]
             next_ppc = episode['proprioception'][idx][:]
-            goal = None
+            goal = 0.0
 
         for i in range(self._nstep):
             step_reward = episode['reward'][idx + i]
