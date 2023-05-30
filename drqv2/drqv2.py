@@ -385,6 +385,8 @@ class DrQV2Agent:
         lrf: LearnedRewardFunction =  None, # sometimes we must recalculate the reward
         goal_image: np.ndarray = None, # when goal_image is not None, this overrides whatever the replay buffer returns as the goal
         airl_style_reward: bool = False,
+        refresh_reward: bool = False,
+        take_log_reward: bool = False,
     ):
         metrics = dict()
 
@@ -396,15 +398,16 @@ class DrQV2Agent:
             batch, self.device)
 
         # refresh stale reward
-        if lrf is not None:
-            if goal_image is not None:
-                # do something fancy
-                assert torch.allclose(goal.float(), torch.Tensor([0.0]).to(self.device))
-                batch_size = obs.size()[0]
-                goal_np = np.concatenate([np.expand_dims(goal_image, axis=0) for _ in range(batch_size)])
-                goal = torch.from_numpy(goal_np).to(self.device).byte()
+        if refresh_reward:
+            if lrf is not None:
+                if goal_image is not None:
+                    # do something fancy
+                    assert torch.allclose(goal.float(), torch.Tensor([0.0]).to(self.device))
+                    batch_size = obs.size()[0]
+                    goal_np = np.concatenate([np.expand_dims(goal_image, axis=0) for _ in range(batch_size)])
+                    goal = torch.from_numpy(goal_np).to(self.device).byte()
 
-            reward = torch.Tensor(lrf._calculate_reward(obs, goal, airl_style_reward=airl_style_reward)).to(self.device).float()
+                reward = torch.Tensor(lrf._calculate_reward(obs, goal, airl_style_reward=airl_style_reward, take_log_reward=take_log_reward)).to(self.device).float()
 
         # augment
         if self.image_state_space:
