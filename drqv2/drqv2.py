@@ -387,6 +387,8 @@ class DrQV2Agent:
         airl_style_reward: bool = False,
         refresh_reward: bool = False,
         take_log_reward: bool = False,
+        take_d_ratio: bool = False,
+        lgn_multiplier: float = 1.0,
     ):
         metrics = dict()
 
@@ -407,7 +409,7 @@ class DrQV2Agent:
                     goal_np = np.concatenate([np.expand_dims(goal_image, axis=0) for _ in range(batch_size)])
                     goal = torch.from_numpy(goal_np).to(self.device).byte()
 
-                reward = torch.Tensor(lrf._calculate_reward(obs, goal, airl_style_reward=airl_style_reward, take_log_reward=take_log_reward)).to(self.device).float()
+                reward = torch.Tensor(lrf._calculate_reward(obs, goal, airl_style_reward=airl_style_reward, take_log_reward=take_log_reward, take_d_ratio=take_d_ratio, lgn_multiplier=lgn_multiplier)).to(self.device).float()
 
         # augment
         if self.image_state_space:
